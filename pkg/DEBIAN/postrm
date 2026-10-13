@@ -1,0 +1,7 @@
+#!/bin/bash
+# purge 卸载时:应用文件删除,但用户数据(上传/翻译结果/元数据)保留
+if [ "$1" = "purge" ]; then
+  echo "pdf-translate: 用户数据保留在 /opt/pdf-translate/data(含已翻译论文与元数据)。"
+  echo "pdf-translate: 如需彻底清理,请手动删除该目录。"
+fi
+exit 0

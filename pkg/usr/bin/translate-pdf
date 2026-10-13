@@ -1,0 +1,12 @@
+#!/bin/bash
+# 用本地翻译服务(Hy-MT2-7B)翻译整篇 PDF,输出双语对照 + 纯译文
+# 环境变量: TRANSLATE_BASE_URL(默认 http://127.0.0.1:8910/v1)、TRANSLATE_MODEL(默认 Hy-MT2-7B)
+[ -z "$1" ] && { echo "用法: translate-pdf 文件.pdf [输出目录]"; exit 1; }
+BASE_URL="${TRANSLATE_BASE_URL:-http://127.0.0.1:8910/v1}"
+MODEL="${TRANSLATE_MODEL:-Hy-MT2-7B}"
+OUT="${2:-$(dirname "$(realpath "$1")")}"
+exec babeldoc --files "$1" \
+  --openai --openai-model "$MODEL" \
+  --openai-base-url "$BASE_URL" --openai-api-key none \
+  --lang-in en --lang-out zh --output "$OUT" \
+  --watermark-output-mode no_watermark --no-watermark

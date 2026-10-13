@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#1a7f5a"/>
+  <path d="M14 18h22v28H14z" fill="#ffffff" opacity=".92"/>
+  <path d="M34 22h16v24H34z" fill="#d8efe4"/>
+  <text x="25" y="40" font-size="22" text-anchor="middle" fill="#1a7f5a" font-family="sans-serif" font-weight="bold">译</text>
+  <text x="42" y="38" font-size="14" text-anchor="middle" fill="#1e6b4c" font-family="sans-serif">A</text>
+  <rect x="12" y="48" width="40" height="4" rx="2" fill="#ffffff" opacity=".85"/>
+</svg>

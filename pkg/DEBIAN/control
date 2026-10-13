@@ -1,0 +1,12 @@
+Package: pdf-translate
+Version: 1.0.4
+Section: web
+Priority: optional
+Architecture: all
+Maintainer: pdf-translate <pdf-translate@localhost>
+Depends: curl
+Description: 文献翻译与 AI 问答工作台
+ 本地 Web 应用(端口 8900):PDF 整篇翻译(BabelDOC + 远程 OpenAI 兼容翻译服务)、
+ 双语对照阅读、划词翻译、接入 AI 命令行助手(ZCode/Claude Code/Codex 等)的论文问答与语义归档。
+ 内置 systemd 服务(开机自启)。运行依赖独立 venv(由 setup-venv.sh 自动创建,需要 uv 与网络)。
+ AI 问答需本机已登录相应 AI CLI,或配置 OpenAI 兼容 API。

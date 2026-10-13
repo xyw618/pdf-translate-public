@@ -1,0 +1,21 @@
+[Unit]
+Description=PDF Translate 文献翻译与 AI 问答
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# 按部署用户修改(或由 build-deb.sh 构建时替换 __APP_USER__)
+User=__APP_USER__
+WorkingDirectory=/opt/pdf-translate
+Environment=PT_LLM_BASE=http://127.0.0.1:8910
+# Environment=PT_BABELDOC=/path/to/babeldoc
+# Environment=PT_ZCODE=/path/to/zcode
+# Environment=PT_TRANSLATE_MODEL=your-translation-model
+ExecStartPre=/opt/pdf-translate/setup-venv.sh
+ExecStart=/opt/pdf-translate/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8900
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

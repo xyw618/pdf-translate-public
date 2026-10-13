@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>文献翻译工作台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/style.css">
+<script src="/pdfjs/pdf.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="logo">📗 文献翻译 <span class="sub">本地文献工作台</span></div>
+  <div id="svc" class="svc">检查服务…</div>
+</header>
+<div id="app">
+  <aside>
+    <label class="upload-btn" for="fileinput">＋ 上传 PDF</label>
+    <input id="fileinput" type="file" accept="application/pdf" hidden>
+    <div class="aside-title">文献列表
+      <span id="listmode" class="listmode">
+        <button data-m="cat" title="按主题分组">🏷</button>
+        <button data-m="date" title="按上传日期分组">📅</button>
+      </span>
+    </div>
+    <div id="tasklist"></div>
+  </aside>
+  <main>
+    <div id="toolbar">
+      <button id="sidebtn" class="togglebtn on" title="收起/展开文献栏">☰</button>
+      <div id="variant-switch" class="seg hidden">
+        <button data-variant="original">原文</button>
+        <button data-variant="dual">双语对照</button>
+        <button data-variant="mono">纯译文</button>
+      </div>
+      <button id="syncbtn" class="togglebtn on hidden">⇅ 同步滚动:开</button>
+      <div class="pager">
+        <button id="prev">‹</button><span id="pageno">–</span><button id="next">›</button>
+      </div>
+      <div class="zoom">
+        <button id="zoomout">－</button><span id="zoomval">100%</span><button id="zoomin">＋</button>
+      </div>
+      <button id="aibtn" class="togglebtn">🤖 AI 问答</button>
+      <select id="ai-provider" class="ai-provider" title="选择 AI harness"></select>
+      <select id="ai-model" class="ai-model" title="选择 AI 模型" aria-label="AI 模型" disabled><option value="">加载模型…</option></select>
+      <input id="ai-model-custom" class="ai-model hidden" title="自定义模型，回车保存" placeholder="自定义模型，回车保存" aria-label="自定义模型">
+      <button id="ai-model-refresh" class="togglebtn hidden" title="重新加载模型列表" aria-label="刷新模型列表">↻</button>
+      <span id="ai-model-status" class="ai-model-status" role="status"></span>
+      <select id="ai-variant" class="ai-provider" title="推理强度(空 = 模型默认)">
+        <option value="">默认</option>
+        <option value="minimal">min</option>
+        <option value="low">low</option>
+        <option value="high">high</option>
+        <option value="max">max</option>
+      </select>
+      <a id="download" class="dl hidden" download>⬇ 下载</a>
+      <div id="hint" class="hint">选中左侧文献打开;阅读时划选文字即可翻译</div>
+    </div>
+    <div id="viewer"><div id="dualwrap" class="hidden"><div class="col" id="colL"></div><div class="col" id="colR"></div></div><div id="pages"></div><div id="empty">上传或选择左侧文献开始阅读</div></div>
+    <div id="chat" class="hidden">
+      <div id="chat-resize" title="拖动调整高度 · 双击恢复默认"></div>
+      <div class="chat-head">
+        <span>🤖 AI 问答 <em id="chat-ctx"></em></span>
+        <span class="chat-head-right">
+          <button id="chat-clear" title="清空当前论文的对话">🧹 清空对话</button>
+          <button id="chat-close">✕</button>
+        </span>
+      </div>
+      <div id="chat-msgs"></div>
+      <div class="chat-input">
+        <textarea id="chat-text" rows="2" placeholder="问点什么都行;打开文献后可结合论文提问…"></textarea>
+        <button id="chat-send">发送</button>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="pop" class="hidden">
+  <div class="pop-head"><span id="pop-dir">英 → 中</span><span class="pop-btns"><button id="pop-copy-src" title="复制原文">⧉原</button><button id="pop-copy-t" title="复制译文">⧉译</button><button id="pop-close">✕</button></span></div>
+  <div id="pop-src" class="pop-src"></div>
+  <div id="pop-out" class="pop-out">翻译中…</div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

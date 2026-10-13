@@ -1,0 +1,30 @@
+#!/bin/bash
+set -eu
+APP=/opt/pdf-translate
+APP_USER="__APP_USER__"
+APP_HOME="$(getent passwd "$APP_USER" | cut -d: -f6)"
+if [ -z "$APP_HOME" ]; then
+  echo "[pdf-translate] 找不到部署用户,请为目标用户重新构建安装包。" >&2
+  exit 1
+fi
+APP_GROUP="$(id -gn "$APP_USER")"
+LEGACY_DATA="$APP_HOME/pdf-translate/data"
+
+# 迁移旧的手动部署数据(仅目标为空时执行一次)
+if [ -d "$LEGACY_DATA" ] && [ ! -d "$APP/data/uploads" ]; then
+  mkdir -p "$APP/data"
+  cp -r "$LEGACY_DATA/." "$APP/data/"
+  echo "[pdf-translate] 已迁移历史数据到 $APP/data"
+fi
+mkdir -p "$APP/data"
+chown -R "$APP_USER:$APP_GROUP" "$APP/data"
+
+# 停掉旧的手动启动进程,避免端口冲突
+pkill -f "uvicorn server:app" 2>/dev/null || true
+sleep 1
+
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable --now pdf-translate.service 2>/dev/null || true
+echo "[pdf-translate] Web 界面: http://127.0.0.1:8900"
+echo "[pdf-translate] 服务管理: systemctl status|restart|stop pdf-translate"
+exit 0

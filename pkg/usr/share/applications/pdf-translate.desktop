@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=文献翻译
+Name[en]=PDF Translate
+Comment=PDF 翻译、双语对照阅读与 AI 问答
+Exec=xdg-open http://127.0.0.1:8900
+Icon=pdf-translate
+Terminal=false
+Categories=Science;Education;Utility;
+Keywords=翻译;文献;PDF;高光谱;

@@ -1,0 +1,5 @@
+#!/bin/bash
+# 升级/卸载前停止服务(含可能残留的手动启动进程)
+systemctl stop pdf-translate.service 2>/dev/null || true
+pkill -f "uvicorn server:app" 2>/dev/null || true
+exit 0
