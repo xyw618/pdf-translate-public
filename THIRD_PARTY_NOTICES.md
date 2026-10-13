@@ -11,3 +11,5 @@ PDF.js 的原始版权声明保留在 `pdf.min.js` 和 `pdf.worker.min.js` 中:
 Copyright 2023 Mozilla Foundation。
 
 Python 依赖与可选 AI 命令行工具按各自许可证发布;本项目的许可证不替代这些组件的许可证。
+
+可选 ZCode 模型运行桥在用户本机调用并构建其已安装的 ZCode 原生运行库,相应组件仍适用 ZCode 分发版本自身的许可证。本仓库及 deb 仅提供原创桥接源码与构建脚本,不分发 ZCode 源码或构建后的原生运行包。

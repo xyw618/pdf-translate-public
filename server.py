@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import threading
+import tempfile
 import time
 import urllib.request
 import uuid
@@ -14,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from zcode_bridge import BridgeFailure, run_async as run_zcode_bridge, run_sync as read_zcode_bridge
 
 BASE = Path(__file__).parent
 DATA = BASE / "data"
@@ -29,6 +31,7 @@ LLAMA_URL = f"{LLM_BASE}/v1/chat/completions"
 HEALTH_URL = f"{LLM_BASE}/health"
 BABELDOC = os.environ.get("PT_BABELDOC", "babeldoc")
 ZCODE = os.environ.get("PT_ZCODE", "zcode")
+ZCODE_BRIDGE = os.environ.get("PT_ZCODE_BRIDGE", "")
 OPENCODE = os.environ.get("PT_OPENCODE", "opencode")
 TRANSLATE_MODEL = os.environ.get("PT_TRANSLATE_MODEL", "Hy-MT2-7B")
 TRANSLATE_TIMEOUT = 180
@@ -41,7 +44,7 @@ CHAT_TIMEOUT = 240
 # API 类:type=api,OpenAI 兼容 chat/completions,无会话(前端拼接历史),不支持论文附件。
 AI_CONFIG_FILE = DATA / "ai-config.json"
 DEFAULT_AI_PROVIDERS = {
-    "zcode":    {"cmd": ["zcode", "-p", "{prompt}"], "json_flag": "--json", "attach_flag": "--attach"},
+    "zcode":    {"cmd": [ZCODE, "-p", "{prompt}"], "json_flag": "--json", "attach_flag": "--attach", "model_bridge": ZCODE_BRIDGE},
     "claude":   {"cmd": ["claude", "-p", "{prompt}"], "continue_flag": "--continue"},
     "codex":    {"cmd": ["codex", "exec", "{prompt}"]},
     "kimicode": {"cmd": ["kimicode", "-p", "{prompt}"]},
@@ -103,6 +106,7 @@ def save_sessions(d):
     SESSIONS_FILE.write_text(jsonlib.dumps(d, ensure_ascii=False, indent=2))
 
 app = FastAPI()
+zcode_chat_locks = {}
 tasks = {}
 q = queue.Queue()
 
@@ -348,6 +352,33 @@ async def chat(body: dict):
     attach = UPLOADS / f"{tid}.pdf" if tid else None
     attach_ok = bool(tid and attach.is_file())
 
+    if provider == "zcode" and conf.get("model_bridge"):
+        async with zcode_chat_locks.setdefault(key, asyncio.Lock()):
+            sid = load_sessions().get(key) if cont else None
+            payload = {"action": "chat", "workingDirectory": str(chat_dir), "message": question}
+            if sid:
+                payload["sessionId"] = sid
+            if conf.get("model"):
+                payload["model"] = conf["model"]
+            attached = attach_ok and not sid
+            if attached:
+                payload["attach"] = str(attach)
+            try:
+                result = await run_zcode_bridge(conf["model_bridge"], payload, CHAT_TIMEOUT)
+            except BridgeFailure as error:
+                raise HTTPException(error.status, str(error))
+            answer, next_sid = result.get("response"), result.get("sessionId")
+            if not isinstance(answer, str) or not answer.strip() or not isinstance(next_sid, str) or not next_sid:
+                raise HTTPException(502, "ZCode 运行桥未返回有效回答和会话")
+            if conf.get("model") and result.get("model") != conf["model"]:
+                raise HTTPException(502, "ZCode 回答未使用所选模型")
+            sessions = load_sessions()
+            sessions[key] = next_sid
+            save_sessions(sessions)
+            return {"answer": answer.strip(), "attached": attach_ok, "provider": provider, "sessionId": next_sid, "model": result.get("model")}
+    if provider == "zcode" and conf.get("model"):
+        raise HTTPException(400, "ZCode 模型切换需要先配置本机运行桥")
+
     # opencode:写入项目级权限配置,非交互模式才能使用工具(读文件/跑命令)
     if provider == "opencode":
         pc = chat_dir / "opencode.json"
@@ -523,7 +554,8 @@ def get_ai_model():
     cfg = load_ai_config()
     prov = cfg["provider"]
     conf = cfg["providers"][prov]
-    return {"provider": prov, "model": conf.get("model"), "editable": "model" in conf or prov == "opencode"}
+    editable = bool(conf.get("model_bridge")) if prov == "zcode" else "model" in conf or prov == "opencode"
+    return {"provider": prov, "model": conf.get("model"), "editable": editable, "catalog": prov == "opencode" or (prov == "zcode" and editable)}
 
 
 @app.get("/api/ai/models")
@@ -532,6 +564,26 @@ def list_ai_models(provider: str = ""):
     prov = provider or cfg["provider"]
     if prov not in cfg["providers"]:
         raise HTTPException(404, "未知的 AI harness")
+    if prov == "zcode":
+        bridge = cfg["providers"][prov].get("model_bridge")
+        if not isinstance(bridge, str) or not bridge:
+            raise HTTPException(400, "ZCode 模型选择需要先配置本机运行桥")
+        with tempfile.TemporaryDirectory(prefix="pdf-translate-zcode-catalog-") as cwd:
+            try:
+                catalog = read_zcode_bridge(bridge, {"action": "models", "workingDirectory": cwd})
+            except BridgeFailure as error:
+                raise HTTPException(error.status, str(error))
+        models = catalog.get("models")
+        if not isinstance(models, list) or not models:
+            raise HTTPException(502, "ZCode 没有可用模型，请先登录并配置模型")
+        if any(not isinstance(model, dict) or not isinstance(model.get("id"), str) or not re.fullmatch(r"[^/\s]+/\S+", model["id"]) for model in models):
+            raise HTTPException(502, "ZCode 模型列表格式无效")
+        return {
+            "provider": prov, "current": catalog.get("current", ""),
+            "models": sorted({model["id"] for model in models}),
+            "labels": {model["id"]: model.get("label", model["id"]) for model in models},
+            "providerLabels": {model["id"].split("/", 1)[0]: model.get("providerLabel", model["id"].split("/", 1)[0]) for model in models},
+        }
     if prov != "opencode":
         return {"provider": prov, "models": []}
     cmd = cfg["providers"][prov].get("cmd")
@@ -572,7 +624,11 @@ def set_ai_model(body: dict):
     prov = cfg["provider"]
     if body.get("provider") and body["provider"] != prov:
         raise HTTPException(409, "AI harness 已切换，请重新加载模型配置")
-    if "model" not in cfg["providers"][prov] and prov != "opencode":
+    if prov == "zcode":
+        catalog = list_ai_models("zcode")
+        if model not in catalog["models"]:
+            raise HTTPException(400, "所选 ZCode 模型不可用，请刷新模型列表")
+    elif "model" not in cfg["providers"][prov] and prov != "opencode":
         raise HTTPException(400, f"harness {prov} 不支持切换模型")
     cfg["providers"][prov]["model"] = model
     save_ai_config(cfg)

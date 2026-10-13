@@ -11,6 +11,7 @@
 - **划词翻译与干净复制**:选中文本即弹出翻译;按几何位置从 PDF 结构重组文本,Ctrl+C 拿到的是完整段落(自动修复断词连字符、过滤图表乱码);
 - **AI 论文问答**:底部对话面板,可接入多种 AI 命令行助手(CLI)或 OpenAI 兼容 API;打开文献自动附上 PDF,**服务端真实会话**(上下文由 CLI 自己维护,不轮次截断);每篇论文独立对话,本地持久化;
 - **OpenCode 模型选择**:工具条的模型下拉框从本机 `opencode models` 读取当前配置的模型,按服务商分组;选择后自动保存,刷新页面会恢复。可点击 ↻ 重新加载列表,或选择“手动输入…”后输入模型 ID 并按回车保存;
+- **ZCode 模型选择**:配置本机原生运行桥后,从已登录 ZCode 读取当前账号实际可用的模型;选择后自动保存,每次提问应用该模型,切换模型仍可续接同一篇论文的会话;
 - **语义归档**:每篇翻译完成后由 AI 自动生成类别与一句话摘要,列表按主题或上传日期分组;
 - **服务状态灯**:绿=全部正常 / 黄=翻译服务离线 / 红=本机后端未启动。
 
@@ -54,6 +55,20 @@ uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" python-mult
 PATH="$PWD/.venv/bin:$PATH" .venv/bin/uvicorn server:app --host 127.0.0.1 --port 8900
 ```
 
+### 启用 ZCode 模型选择(可选)
+
+ZCode 0.16.9 的 `-p` 模式没有模型选择参数,不能把交互命令 `/model` 当作提问发送。本项目通过独立运行桥调用本机 ZCode 原生运行库,沿用其登录、套餐、模型列表与会话管理,不读取或复制账号密钥,也不修改 ZCode 的全局默认模型。
+
+需要已登录的 ZCode、与安装版本匹配且依赖已安装的 ZCode 源码目录,以及该版本支持的 Node.js(本机验证使用 Node.js 24)。使用运行 ZCode 的 Node.js 构建:
+
+```bash
+node scripts/build-zcode-model-bridge.mjs /path/to/zcode-source
+```
+
+脚本会在 ZCode 的 CLI `dist` 目录生成 `pdf-translate-model-bridge` 启动器与 `.cjs` 运行包,保持原有 `zcode` 命令不变。将启动器的绝对路径配置到 `PT_ZCODE_BRIDGE`,然后重启服务。运行包依赖同目录的 ZCode 原生资源,应留在该安装目录;ZCode 升级后需重新构建。原生接口可能随版本变化,已验证版本为 0.16.9。
+
+未配置运行桥时,保留原来的 ZCode CLI 默认模型问答,模型选择控件不可用。配置后若模型不再可用或应用失败,会明确报错,不会自动改用其他模型。本仓库和 deb 只包含桥接源码与构建脚本,不包含 ZCode 源码、运行包或账号数据。
+
 ## 配置(环境变量)
 
 | 变量 | 默认 | 说明 |
@@ -62,6 +77,7 @@ PATH="$PWD/.venv/bin:$PATH" .venv/bin/uvicorn server:app --host 127.0.0.1 --port
 | `PT_TRANSLATE_MODEL` | `Hy-MT2-7B` | 翻译服务模型名 |
 | `PT_BABELDOC` | `babeldoc` | BabelDOC 可执行文件 |
 | `PT_ZCODE` | `zcode` | AI CLI 可执行文件 |
+| `PT_ZCODE_BRIDGE` | 空 | 可选的 ZCode 原生模型运行桥启动器绝对路径 |
 | `PT_OPENCODE` | `opencode` | OpenCode CLI 可执行文件 |
 
 systemd 部署通过 `sudo systemctl edit pdf-translate` 添加本机配置,例如:
@@ -71,6 +87,8 @@ systemd 部署通过 `sudo systemctl edit pdf-translate` 添加本机配置,例�
 Environment=PT_LLM_BASE=http://127.0.0.1:8910
 Environment=PT_BABELDOC=/opt/pdf-translate/venv/bin/babeldoc
 Environment=PT_OPENCODE=opencode
+# 启用 ZCode 模型选择时添加,替换为构建脚本输出的路径:
+# Environment=PT_ZCODE_BRIDGE=/path/to/pdf-translate-model-bridge
 ```
 
 若 AI CLI 不在服务的 PATH 中,将对应变量改为本机可执行文件的绝对路径。保存后执行 `sudo systemctl restart pdf-translate`。地址、密钥和个人路径应写入本机配置,不要提交到源码。
@@ -80,15 +98,17 @@ Environment=PT_OPENCODE=opencode
 - 上传 PDF → 自动翻译 → 列表按语义/日期分组;
 - 打开文献:原文 / 双语对照 / 纯译文三种视图;Ctrl+滚轮缩放(双语两栏独立);
 - 划词:自动弹出翻译,Ctrl+C 复制干净原文,浮层按钮复制原/译文;
-- 🤖 AI 问答:底部面板,打开文献后直接就内容提问;🧹 清空当前对话;选择 opencode 后可在模型下拉框切换模型;
+- 🤖 AI 问答:底部面板,打开文献后直接就内容提问;🧹 清空当前对话;选择 opencode 或已配置运行桥的 zcode 后,可在模型下拉框切换模型;
 - 命令行翻译:`translate-pdf 文件.pdf [输出目录]`。
 
 ## 目录结构
 
 ```
 server.py            # FastAPI 后端(翻译任务队列、划词/对话 API、AI 接入)
+zcode_bridge.py      # ZCode 原生运行桥的 JSON 传输与进程清理
 static/              # 前端(原生 JS + PDF.js)
 scripts/setup-venv.sh# venv 环境准备(幂等)
+scripts/*zcode*bridge.mjs # 可选 ZCode 桥接源码与本机构建脚本
 pkg/                 # deb 打包模板(control、systemd、desktop、图标、命令)
 build-deb.sh         # 一键构建 deb
 ```

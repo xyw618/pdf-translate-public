@@ -774,40 +774,42 @@ async function loadModel() {
   const sel = $("#ai-model"), custom = $("#ai-model-custom"), refresh = $("#ai-model-refresh");
   sel.disabled = true;
   custom.classList.add("hidden");
-  refresh.classList.toggle("hidden", $("#ai-provider").value !== "opencode");
+  refresh.classList.toggle("hidden", !["opencode", "zcode"].includes($("#ai-provider").value));
   showModelStatus("加载模型…");
   try {
     const r = await fetch("/api/ai/model", { signal: controller.signal });
     if (!r.ok) throw new Error("无法读取当前模型");
     const d = await r.json();
-    sel.replaceChildren(new Option(d.model || "由账号决定", d.model || ""));
+    sel.replaceChildren(new Option(d.model || (d.provider === "zcode" ? "ZCode 默认模型" : "由账号决定"), d.model || ""));
     sel.dataset.model = d.model || "";
     sel.dataset.editable = String(d.editable);
-    sel.title = d.editable ? "选择模型后自动保存" : "模型由账号决定";
-    if (d.editable) sel.add(new Option("手动输入…", ""));
+    sel.title = d.editable ? "选择模型后自动保存" : d.provider === "zcode" ? "ZCode 模型选择尚未配置" : "模型由账号决定";
+    if (d.editable && d.provider !== "zcode") sel.add(new Option("手动输入…", ""));
     sel.value = d.model || "";
     sel.disabled = !d.editable;
-    if (d.provider !== "opencode") { showModelStatus(""); return; }
+    if (!d.catalog) { refresh.classList.add("hidden"); showModelStatus(""); return; }
     refresh.classList.remove("hidden");
-    const mr = await fetch("/api/ai/models?provider=opencode", { signal: controller.signal });
+    const mr = await fetch(`/api/ai/models?provider=${encodeURIComponent(d.provider)}`, { signal: controller.signal });
     const data = await mr.json();
     if (!mr.ok) throw new Error(data.detail || "模型列表加载失败");
+    const selected = d.model || data.current || "";
+    sel.dataset.model = selected;
     sel.replaceChildren();
-    if (!data.models.includes(d.model)) sel.add(new Option((d.model || "未设置模型") + "（当前）", d.model || ""));
+    if (!data.models.includes(selected)) sel.add(new Option((selected || "未设置模型") + "（当前）", selected));
     const groups = new Map();
     for (const model of data.models) {
       const slash = model.indexOf("/");
       const provider = model.slice(0, slash);
       if (!groups.has(provider)) {
         const group = document.createElement("optgroup");
-        group.label = provider;
+        group.label = data.providerLabels?.[provider] || provider;
         groups.set(provider, group);
         sel.appendChild(group);
       }
-      groups.get(provider).appendChild(new Option(model.slice(slash + 1), model));
+      groups.get(provider).appendChild(new Option(data.labels?.[model] || model.slice(slash + 1), model));
     }
-    sel.add(new Option("手动输入…", ""));
-    sel.value = d.model || "";
+    if (d.provider !== "zcode") sel.add(new Option("手动输入…", ""));
+    sel.value = selected;
     showModelStatus(`${data.models.length} 个模型`);
   } catch (e) {
     if (e.name !== "AbortError") showModelStatus(e.message + (refresh.classList.contains("hidden") ? "" : "，点击 ↻ 重试"), true);
